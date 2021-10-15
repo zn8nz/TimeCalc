@@ -39,19 +39,36 @@ namespace TimeCalc
 				var sb = new StringBuilder();
 				Match match;
 				foreach (var range in times) {
-					match = RangeRx.Match(range);
-					if (match.Success) {
+					if (string.IsNullOrWhiteSpace(range) || range.StartsWith("#")) {
 						sb.AppendLine(range);
-						string start = match.Groups["start"].Value;
-						string end = match.Groups["end"].Value;
-						if (TimeSpan.TryParse(start, out var from) && TimeSpan.TryParse(end, out var to)) {
-							if (from > to) to += TimeSpan.FromHours(12);
-							sum += to - from;
+						continue;
+					}
+					int p = range.IndexOf("Δ");
+					if (p == 0) {
+						if (TimeSpan.TryParse(range.Substring(1).TrimEnd(), out var delta)) {
+							sum += delta;
 						}
+						sb.AppendLine(range);
 					}
 					else {
-						if (!range.EndsWith(" <error")) sb.AppendLine(range + " <error");
-						else sb.AppendLine(range);
+						match = RangeRx.Match(range);
+						if (match.Success) {
+							string range1 = range;
+							string start = match.Groups["start"].Value;
+							string end = match.Groups["end"].Value;
+							if (TimeSpan.TryParse(start, out var from) && TimeSpan.TryParse(end, out var to)) {
+								if (from > to) to += TimeSpan.FromHours(12);
+								TimeSpan diff = to - from;
+								sum += diff;
+								range1 = p == -1 ? range : range.Substring(0, p);
+								range1 = range1.TrimEnd() + $" Δ {diff:c}";
+							}
+							sb.AppendLine(range1);
+						}
+						else {
+							if (!range.EndsWith(" <error")) sb.AppendLine(range + " <error");
+							else sb.AppendLine(range);
+						}
 					}
 				}
 				TotalSoFar.Content = sum.ToString("c");
@@ -63,7 +80,8 @@ namespace TimeCalc
 					var content = (target - sum).ToString("c");
 					if (sum > target) content += " over";
 					TTG.Content = content;
-				} else {
+				}
+				else {
 					TTG.Content = "error";
 				}
 				Times.Text = sb.ToString();
