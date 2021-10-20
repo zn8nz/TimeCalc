@@ -21,7 +21,7 @@ namespace TimeCalc
 	/// </summary>
 	public partial class MainWindow : Window
 	{
-		private static readonly Regex RangeRx = new Regex(@"^(?<start>\d\d?:\d\d)[- /]+(?<end>\d\d?:\d\d\b)", RegexOptions.Compiled);
+		private static readonly Regex RangeRx = new Regex(@"^(?<start>\d\d?:\d\d)[- /]+(?<end>\d\d?:\d\d\b|now)", RegexOptions.Compiled);
 		private static readonly Regex TargetRx = new Regex(@"^(?<hours>\d+)(?::(?<minutes>\d\d))?$", RegexOptions.Compiled);
 
 		public MainWindow()
@@ -34,16 +34,21 @@ namespace TimeCalc
 		private void Total_Click(object sender, RoutedEventArgs e)
 		{
 			try {
-				string[] times = Times.Text.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+				string[] lines = Times.Text.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
 				var sum = TimeSpan.Zero;
 				var sb = new StringBuilder();
 				Match match;
-				foreach (var range in times) {
+				foreach (string line in lines) {
+					string range = line;
 					if (string.IsNullOrWhiteSpace(range) || range.StartsWith("#")) {
 						sb.AppendLine(range);
 						continue;
 					}
-					int p = range.IndexOf("Δ");
+					int p = range.IndexOf('Δ');
+					if (p == -1) {
+						p = range.IndexOf('d');
+						if (p != -1) range = range.Replace('d', 'Δ');
+					}
 					if (p == 0) {
 						if (TimeSpan.TryParse(range.Substring(1).TrimEnd(), out var delta)) {
 							sum += delta;
@@ -51,11 +56,13 @@ namespace TimeCalc
 						sb.AppendLine(range);
 					}
 					else {
+						// line format: hh:mm-hh:mm  or hh:mm-now
 						match = RangeRx.Match(range);
 						if (match.Success) {
 							string range1 = range;
 							string start = match.Groups["start"].Value;
 							string end = match.Groups["end"].Value;
+							if (end == "now") end = DateTime.Now.ToString("h:mm");
 							if (TimeSpan.TryParse(start, out var from) && TimeSpan.TryParse(end, out var to)) {
 								if (from > to) to += TimeSpan.FromHours(12);
 								TimeSpan diff = to - from;
