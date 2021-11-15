@@ -21,7 +21,7 @@ namespace TimeCalc
 	/// </summary>
 	public partial class MainWindow : Window
 	{
-		private static readonly Regex RangeRx = new Regex(@"^(?<start>\d\d?:\d\d)[- /]+(?<end>\d\d?:\d\d\b|now)", RegexOptions.Compiled);
+		private static readonly Regex RangeRx = new Regex(@"^(?<start>\d\d?:\d\d)[- /]+(?<end>\d\d?:\d\d\b|now|!)", RegexOptions.Compiled);
 		private static readonly Regex TargetRx = new Regex(@"^(?<hours>\d+)(?::(?<minutes>\d\d))?$", RegexOptions.Compiled);
 
 		public MainWindow()
@@ -33,17 +33,27 @@ namespace TimeCalc
 
 		private void Total_Click(object sender, RoutedEventArgs e)
 		{
+			TimeSpan previous = default;
+			TimeSpan pause = default;
+			TimeSpan pauseSum = TimeSpan.Zero;
 			try {
-				string[] lines = Times.Text.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+				string[] lines = Times.Text.Split(new string[] { Environment.NewLine }, StringSplitOptions.None);
 				var sum = TimeSpan.Zero;
 				var sb = new StringBuilder();
 				Match match;
 				foreach (string line in lines) {
-					string range = line;
-					if (string.IsNullOrWhiteSpace(range) || range.StartsWith("#")) {
-						sb.AppendLine(range);
+					if (string.IsNullOrWhiteSpace(line) || line.StartsWith("<")) {
 						continue;
 					}
+					if (line.StartsWith("#") && pauseSum != TimeSpan.Zero) {
+						sb.AppendLine($"<   💤 total {pauseSum:h'h 'mm}");
+						sb.AppendLine();
+						sb.AppendLine(line);
+						previous = default;
+						pauseSum = TimeSpan.Zero;
+						continue;
+					}
+					string range = line;
 					int p = range.IndexOf('Δ');
 					if (p == -1) {
 						p = range.IndexOf('d');
@@ -62,13 +72,20 @@ namespace TimeCalc
 							string range1 = range;
 							string start = match.Groups["start"].Value;
 							string end = match.Groups["end"].Value;
-							if (end == "now") end = DateTime.Now.ToString("h:mm");
+							
+							if (end == "now" || end == "!") end = DateTime.Now.ToString("h:mm");
 							if (TimeSpan.TryParse(start, out var from) && TimeSpan.TryParse(end, out var to)) {
 								if (from > to) to += TimeSpan.FromHours(12);
 								TimeSpan diff = to - from;
 								sum += diff;
 								range1 = p == -1 ? range : range.Substring(0, p);
-								range1 = range1.TrimEnd() + $" Δ {diff:c}";
+								if (previous != default) {
+									pause = previous - from;
+									pauseSum += pause;
+									if (pause != default) sb.AppendLine($"<   {pause:h'h 'mm}");
+								}
+								previous = to;
+								range1 = range1.TrimEnd() + $" Δ {diff:h'h 'mm}";
 							}
 							sb.AppendLine(range1);
 						}
@@ -84,16 +101,25 @@ namespace TimeCalc
 					int hours = int.TryParse(match.Groups["hours"].Value, out int h) ? h : 0;
 					int minutes = int.TryParse(match.Groups["minutes"].Value, out int m) ? m : 0;
 					var target = new TimeSpan(hours, minutes, 0);
-					var content = (target - sum).ToString("c");
-					if (sum > target) content += " over";
-					TTG.Content = content;
+					var ttg = target - sum;
+					var ttgContent = ttg.ToString("c");
+					if (sum > target) ttgContent += " over";
+					TTG.Content = ttgContent;
+					var eta = DateTime.Now + ttg;
+					if (eta > DateTime.Now.Date.AddDays(1)) {
+						ETA.Content = eta.ToString("ddd HH:mm");
+					} else {
+						ETA.Content = eta.ToString("HH:mm");
+					}
 				}
 				else {
 					TTG.Content = "error";
 				}
 				Times.Text = sb.ToString();
 			}
-			catch { }
+			catch (Exception ex) {
+				System.Diagnostics.Trace.WriteLine(ex);
+			}
 		}
 
 		protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
