@@ -45,12 +45,17 @@ namespace TimeCalc
 					if (string.IsNullOrWhiteSpace(line) || line.StartsWith("<")) {
 						continue;
 					}
-					if (line.StartsWith("#") && pauseSum != TimeSpan.Zero) {
-						sb.AppendLine($"<   💤 total {pauseSum:h'h 'mm}");
-						sb.AppendLine();
-						sb.AppendLine(line);
-						previous = default;
-						pauseSum = TimeSpan.Zero;
+					if (line.StartsWith("#")) {
+						if (pauseSum != TimeSpan.Zero) {
+							sb.AppendLine($"<   💤 total {pauseSum:h'h 'mm}");
+							sb.AppendLine();
+							sb.AppendLine(line);
+							previous = default;
+							pauseSum = TimeSpan.Zero;
+						}
+						else {
+							sb.AppendLine(line);
+						}
 						continue;
 					}
 					string range = line;
@@ -62,6 +67,7 @@ namespace TimeCalc
 					if (p == 0) {
 						if (TimeSpan.TryParse(range.Substring(1).TrimEnd(), out var delta)) {
 							sum += delta;
+							pauseSum += delta;
 						}
 						sb.AppendLine(range);
 					}
