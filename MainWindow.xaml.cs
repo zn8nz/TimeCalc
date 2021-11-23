@@ -24,6 +24,7 @@ namespace TimeCalc
 		private static readonly Regex RangeRx = new Regex(@"^(?<start>\d\d?:\d\d)[- /]+(?<end>\d\d?:\d\d\b|now|!!)", RegexOptions.Compiled);
 		private static readonly Regex TargetRx = new Regex(@"^(?<hours>\d+)(?::(?<minutes>\d\d))?$", RegexOptions.Compiled);
 		private static readonly Regex HoursMinutesRx = new Regex(@"(?<pause>-)?(?<hours>\d+)h ?(?<minutes>\d\d?)", RegexOptions.Compiled);
+		private string TimeFormat(TimeSpan ts) => ts.ToString("h'h 'mm");
 
 		public MainWindow()
 		{
@@ -53,7 +54,7 @@ namespace TimeCalc
 					}
 					if (line.StartsWith("#")) {
 						if (pauseSum != TimeSpan.Zero) {
-							sb.AppendLine($"<   💤 total {pauseSum:h'h 'mm}");
+							sb.AppendLine($"<   💤 total {TimeFormat(pauseSum)}");
 							sb.AppendLine();
 							sb.AppendLine(line);
 							previous = default;
@@ -62,6 +63,10 @@ namespace TimeCalc
 						else {
 							sb.AppendLine(line);
 						}
+						continue;
+					}
+					if (line.StartsWith("start")) {
+						sb.AppendLine(line);
 						continue;
 					}
 					string range = line;
@@ -97,7 +102,7 @@ namespace TimeCalc
 								if (previous != default) {
 									pause = previous - from;
 									pauseSum += pause;
-									if (pause != default) sb.AppendLine($"<   {pause:h'h 'mm}");
+									if (pause != default) sb.AppendLine($"<   {TimeFormat(pause)}");
 								}
 								previous = to;
 								range1 = range1.TrimEnd() + $" Δ {diff:h'h 'mm}";
@@ -117,7 +122,7 @@ namespace TimeCalc
 					int minutes = int.TryParse(match.Groups["minutes"].Value, out int m) ? m : 0;
 					var target = new TimeSpan(hours, minutes, 0);
 					var ttg = target - sum;
-					var ttgContent = ttg.ToString("c");
+					var ttgContent = TimeFormat(ttg);
 					if (sum > target) ttgContent += " over";
 					TTG.Content = ttgContent;
 					var eta = DateTime.Now + ttg;
@@ -177,14 +182,33 @@ namespace TimeCalc
 			if (e.NewValue.Equals(true)) Total();
 		}
 
-		private void Now_Click(object sender, RoutedEventArgs e)
+		private void End_Click(object sender, RoutedEventArgs e)
 		{
-			Match m = new Regex(@"(\bnow\b|!!)").Match(Times.Text);
+			Match m = new Regex(@"(?:\bnow\b|!!)[^\r\n]*", RegexOptions.Compiled).Match(Times.Text);
 			if (m.Success) {
-				Times.Text = Times.Text.Substring(0, m.Index)
+				int i = m.Index;
+				Times.Text = Times.Text.Substring(0, i)
 					+ DateTime.Now.TimeOfDay.ToString("h':'mm")
-					+ Times.Text.Substring(m.Index + m.Length);
+					+ "\r\nstart"
+					+ Times.Text.Substring(i + m.Length);
+				Total();
 			}
 		}
+
+		private void Start_Click(object sender, RoutedEventArgs e)
+		{
+			Match m = new Regex(@"\bstart\b", RegexOptions.Compiled).Match(Times.Text);
+			if (m.Success) {
+				int i = m.Index;
+				Times.Text = Times.Text.Substring(0, i)
+					+ DateTime.Now.TimeOfDay.ToString("h':'mm")
+					+ "-now"
+					+ Times.Text.Substring(i + m.Length);
+				Total();
+			}
+		}
+
+
 	}
 }
+
